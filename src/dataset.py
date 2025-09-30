@@ -21,10 +21,11 @@ class CSVMaskedDataset(Dataset):
         self.samples = []
         for seq in df["sequence"].dropna().tolist():
             s = seq.upper().replace("U", "T")
-            ids_full = self.tok.tokenize(s, context_len=None, truncate=False, add_special=False)
-            # chunkowanie do stałej długości
+            ids_full = self.tok.tokenize(
+                s, context_len=None, truncate=False, add_special=False
+            )
             for i in range(0, len(ids_full), self.cfg.seq_len):
-                chunk = ids_full[i:i+self.cfg.seq_len]
+                chunk = ids_full[i : i + self.cfg.seq_len]
                 if len(chunk) < self.cfg.seq_len:
                     if len(chunk) < self.cfg.seq_len // 2:
                         continue
@@ -32,7 +33,9 @@ class CSVMaskedDataset(Dataset):
                     chunk = chunk + [self.tok.pad_id] * pad_len
                 self.samples.append(chunk)
         if not self.samples:
-            raise ValueError("Brak danych po tokenizacji CSV — sprawdź plik lub seq_len")
+            raise ValueError(
+                "Brak danych po tokenizacji CSV — sprawdź plik lub seq_len"
+            )
 
     def __len__(self):
         return len(self.samples)
@@ -41,8 +44,10 @@ class CSVMaskedDataset(Dataset):
         ids = self.samples[idx][:]
         attn = [0 if t == self.tok.pad_id else 1 for t in ids]
         labels = [-100] * len(ids)
-        spans = sample_mask_spans(len(ids), p=self.cfg.mask_prob, lam=self.cfg.span_lambda)
-        for (a, b) in spans:
+        spans = sample_mask_spans(
+            len(ids), p=self.cfg.mask_prob, lam=self.cfg.span_lambda
+        )
+        for a, b in spans:
             for i in range(a, b):
                 if ids[i] == self.tok.pad_id:
                     continue
@@ -53,16 +58,33 @@ class CSVMaskedDataset(Dataset):
                 elif r < 0.9:
                     while True:
                         rnd = random.randrange(0, len(self.tok.id2tok))
-                        if self.tok.id2tok[rnd] not in {self.tok.PAD, self.tok.BOS, self.tok.EOS, self.tok.UNK, self.tok.MASK}:
+                        if self.tok.id2tok[rnd] not in {
+                            self.tok.PAD,
+                            self.tok.BOS,
+                            self.tok.EOS,
+                            self.tok.UNK,
+                            self.tok.MASK,
+                        }:
                             ids[i] = rnd
                             break
                 else:
                     pass
-        return torch.tensor(ids, dtype=torch.long), torch.tensor(attn, dtype=torch.long), torch.tensor(labels, dtype=torch.long)
+        return (
+            torch.tensor(ids, dtype=torch.long),
+            torch.tensor(attn, dtype=torch.long),
+            torch.tensor(labels, dtype=torch.long),
+        )
 
 
 class CSVMLMDataModule(L.LightningDataModule):
-    def __init__(self, csv: str, tokenizer: BPETokenizer, seq_len: int = 512, batch_size: int = 32, workers: int = 2):
+    def __init__(
+        self,
+        csv: str,
+        tokenizer: BPETokenizer,
+        seq_len: int = 512,
+        batch_size: int = 32,
+        workers: int = 2,
+    ):
         super().__init__()
         self.csv = csv
         self.seq_len = seq_len
@@ -75,12 +97,26 @@ class CSVMLMDataModule(L.LightningDataModule):
         full = CSVMaskedDataset(self.csv, self.tokenizer, self.cfg)
         n = len(full)
         n_val = max(1, int(0.1 * n))
-        self.ds_train, self.ds_val = torch.utils.data.random_split(full, [n - n_val, n_val])
+        self.ds_train, self.ds_val = torch.utils.data.random_split(
+            full, [n - n_val, n_val]
+        )
 
     def train_dataloader(self):
-        return DataLoader(self.ds_train, batch_size=self.batch_size, shuffle=True,
-                          num_workers=self.workers, collate_fn=collate, pin_memory=True)
+        return DataLoader(
+            self.ds_train,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.workers,
+            collate_fn=collate,
+            pin_memory=True,
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.ds_val, batch_size=self.batch_size, shuffle=False,
-                          num_workers=self.workers, collate_fn=collate, pin_memory=True)
+        return DataLoader(
+            self.ds_val,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.workers,
+            collate_fn=collate,
+            pin_memory=True,
+        )

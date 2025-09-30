@@ -6,6 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 import lightning as L
 
+
 class DNATransformerCore(nn.Module):
     def __init__(
         self,
@@ -13,7 +14,7 @@ class DNATransformerCore(nn.Module):
         pad_id: int,
         d_model: int = 256,
         n_heads: int = 8,
-        n_layers: int = 6,
+        n_layers: int = 32,
         dim_ff: int = 1024,
         dropout: float = 0.1,
     ):
@@ -38,6 +39,7 @@ class DNATransformerCore(nn.Module):
         h = self.encoder(h, src_key_padding_mask=key_padding_mask)
         return self.lm_head(h)
 
+
 class BPEMLMModule(L.LightningModule):
     def __init__(
         self,
@@ -45,7 +47,7 @@ class BPEMLMModule(L.LightningModule):
         pad_id: int,
         d_model: int = 256,
         n_heads: int = 8,
-        n_layers: int = 6,
+        n_layers: int = 16,
         dim_ff: int = 1024,
         dropout: float = 0.1,
         lr: float = 5e-4,
@@ -104,13 +106,37 @@ class BPEMLMModule(L.LightningModule):
         self.to(dev)
         self.eval()
         masked_text = sequence.upper().replace("U", "T").replace("N", tokenizer.MASK)
-        ids = tokenizer.tokenize(masked_text, context_len=None, truncate=False, add_special=False)
+        ids = tokenizer.tokenize(
+            masked_text, context_len=None, truncate=False, add_special=False
+        )
         attn = [0 if t == tokenizer.pad_id else 1 for t in ids]
         mask_positions = [i for i, t in enumerate(ids) if t == tokenizer.mask_id]
 
         x_t = torch.tensor([ids], dtype=torch.long, device=dev)
         attn_t = torch.tensor([attn], dtype=torch.long, device=dev)
         logits = self(x_t, attn_t)[0]
+        V = logits.size(-1)
+        special_ids = {
+            tokenizer.pad_id,
+            tokenizer.bos_id,
+            tokenizer.eos_id,
+            tokenizer.unk_id,
+            tokenizer.mask_id,
+        }
+
+        def is_dna_tok(tok: str) -> bool:
+            return len(tok) > 0 and all(c in "ACGT" for c in tok)
+
+        allowed_ids = [
+            i
+            for i, t in enumerate(tokenizer.id2tok)
+            if (i not in special_ids) and is_dna_tok(t)
+        ]
+
+        mask = torch.full((V,), -1e9, device=logits.device)
+        mask[torch.tensor(allowed_ids, device=logits.device)] = 0.0
+
+        logits = logits + mask
         probs = F.softmax(logits, dim=-1)
 
         out_ids = ids[:]
@@ -124,12 +150,14 @@ class BPEMLMModule(L.LightningModule):
             vals, inds = torch.topk(p, k=k)
             alts = [(tokenizer.id2tok[int(j)], float(v)) for v, j in zip(vals, inds)]
 
-            results.append({
-                "position_token": i,
-                "chosen_token": pred_tok,
-                "confidence": float(conf),
-                "topk": alts
-            })
+            results.append(
+                {
+                    "position_token": i,
+                    "chosen_token": pred_tok,
+                    "confidence": float(conf),
+                    "topk": alts,
+                }
+            )
 
         filled_text = tokenizer.detokenize(out_ids, skip_special=True)
         return masked_text, filled_text, results

@@ -1,6 +1,7 @@
 import json
 from typing import List, Dict, Optional
 
+
 class BPETokenizer:
     # kanoniczne nazwy
     PAD = "<pad>"
@@ -11,10 +12,10 @@ class BPETokenizer:
 
     # akceptowane aliasy (wiele JSONów ma [PAD], <PAD>, PAD, itp.)
     _ALIASES: Dict[str, List[str]] = {
-        PAD:  ["<pad>", "[PAD]", "<PAD>", "PAD"],
-        BOS:  ["<bos>", "[BOS]", "<BOS>", "BOS"],
-        EOS:  ["<eos>", "[EOS]", "<EOS>", "EOS"],
-        UNK:  ["<unk>", "[UNK]", "<UNK>", "UNK"],
+        PAD: ["<pad>", "[PAD]", "<PAD>", "PAD"],
+        BOS: ["<bos>", "[BOS]", "<BOS>", "BOS"],
+        EOS: ["<eos>", "[EOS]", "<EOS>", "EOS"],
+        UNK: ["<unk>", "[UNK]", "<UNK>", "UNK"],
         MASK: ["<mask>", "[MASK]", "<MASK>", "MASK"],
     }
 
@@ -38,7 +39,9 @@ class BPETokenizer:
                 pairs = sorted(vocab_raw.items(), key=lambda x: (x[1], x[0]))
                 self.id2tok = [tok for tok, _ in pairs]
         else:
-            raise ValueError("Tokenizer JSON must contain 'dict' (list) or {'token': id} mapping.")
+            raise ValueError(
+                "Tokenizer JSON must contain 'dict' (list) or {'token': id} mapping."
+            )
 
         self.tok2id: Dict[str, int] = {t: i for i, t in enumerate(self.id2tok)}
 
@@ -48,16 +51,14 @@ class BPETokenizer:
         self._ensure_special(self.UNK)
         self._ensure_special(self.MASK)
 
-
-        self.pad_id  = self.tok2id[self.PAD]
-        self.bos_id  = self.tok2id[self.BOS]
-        self.eos_id  = self.tok2id[self.EOS]
-        self.unk_id  = self.tok2id[self.UNK]
+        self.pad_id = self.tok2id[self.PAD]
+        self.bos_id = self.tok2id[self.BOS]
+        self.eos_id = self.tok2id[self.EOS]
+        self.unk_id = self.tok2id[self.UNK]
         self.mask_id = self.tok2id[self.MASK]
 
     def __len__(self) -> int:
         return len(self.id2tok)
-
 
     def _find_alias_id(self, canonical: str) -> Optional[int]:
         for name in self._ALIASES.get(canonical, [canonical]):
@@ -74,8 +75,13 @@ class BPETokenizer:
         self.id2tok.append(canonical)
         self.tok2id[canonical] = new_id
 
-    def tokenize(self, text: str, context_len: int | None = None, truncate: bool = True,
-                 add_special: bool = False) -> List[int]:
+    def tokenize(
+        self,
+        text: str,
+        context_len: int | None = None,
+        truncate: bool = True,
+        add_special: bool = False,
+    ) -> List[int]:
         ids: List[int] = []
         if add_special:
             ids.append(self.bos_id)
@@ -120,19 +126,3 @@ class BPETokenizer:
         specials = {self.pad_id, self.bos_id, self.eos_id}
         toks = [self.id2tok[i] for i in ids if not (skip_special and i in specials)]
         return "".join(toks)
-
-    @property
-    def PAD(self) -> str:  # type: ignore[override]
-        return self.__class__.PAD
-    @property
-    def BOS(self) -> str:  # type: ignore[override]
-        return self.__class__.BOS
-    @property
-    def EOS(self) -> str:  # type: ignore[override]
-        return self.__class__.EOS
-    @property
-    def UNK(self) -> str:  # type: ignore[override]
-        return self.__class__.UNK
-    @property
-    def MASK(self) -> str:  # type: ignore[override]
-        return self.__class__.MASK

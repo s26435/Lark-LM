@@ -2,6 +2,7 @@ import random
 from typing import List, Tuple
 import torch
 
+
 def sample_mask_spans(L: int, p: float, lam: float) -> List[Tuple[int, int]]:
     targets = max(1, int(round(p * L)))
     spans = []
@@ -16,8 +17,9 @@ def sample_mask_spans(L: int, p: float, lam: float) -> List[Tuple[int, int]]:
         for i in range(start, end):
             used.add(i)
             spans.append((start, end))
-            covered += (end - start)
+            covered += end - start
     return spans
+
 
 def collate(batch):
     xs, attns, labels = zip(*batch)
